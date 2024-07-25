@@ -77,22 +77,79 @@
       <div class="main-content">
         <h2>Welcome to My Professional Portfolio</h2>
         <p>
-          Hi, I'm Chad Thompson-Smith, a DevOps and Cloud Engineer as well as a
-          Software Developer. Welcome to my portfolio. Here you can find links
-          to my projects, learn more about my work, and get in touch with me.
+          Hi, I'm Chad Thompson-Smith, DevOps & Cloud Engineer and a Software
+          Developer. Welcome to my portfolio. Here, you can explore my projects,
+          learn more about my work, and get in touch with me.
         </p>
         <div class="projects">
           <div class="project">
             <h3>Expense Report Application</h3>
-            <p>Description of Project 1.</p>
-            <a href="https://expenseapp.devopschad.com/">View Project</a>
+            <p>
+              This application is a web-based tool designed to generate custom
+              Excel reports based on user-submitted data. Built using the Flask
+              framework, the application provides an intuitive interface for
+              users to input various data points, which are then used to
+              populate a predefined Excel template. The application runs within
+              a Docker container on an Oracle Compute instance and is served by
+              the Gunicorn production server. An Nginx server, set up inside the
+              Oracle instance but outside the Docker container, acts as an HTTPS
+              termination endpoint and a proxy to the Docker containers. This
+              setup ensures secure and efficient handling of requests. <br />
+              <br />
+              The application also features a robust CI/CD pipeline for seamless
+              deployment from development to production. When changes are pushed
+              to the GitHub repository, a new Docker image is automatically
+              built and pushed to Docker Hub. The Oracle instance then pulls the
+              latest image, replacing the running container with the updated
+              version. This workflow ensures that the application remains
+              up-to-date with minimal manual intervention, providing a reliable
+              and streamlined experience for both users and developers.
+            </p>
+            <div
+              style="
+                display: flex;
+                justify-content: center;
+                align-items: center;
+              "
+            >
+              <a href="https://expenseapp.devopschad.com/">View Project</a>
+            </div>
           </div>
           <div class="project">
             <h3>Chattanooga-Hackathon-2024</h3>
-            <p>Description of Project 2.</p>
-            <a href="https://chattanooga-hackathon-2024.devopschad.com/"
-              >View Project</a
+            <p>
+              I have built a comprehensive registration website for a upcoming
+              hackathon event to be held in Chattanooga, TN. The website, hosted
+              on AWS S3, provides a seamless user experience for participants to
+              register for the event. Leveraging modern web technologies and
+              design principles, the site features an intuitive registration
+              form that allows users to sign up for the hackathon effortlessly.
+              The static website, which is publicly accessible, showcases event
+              details, schedules, and sponsor information, creating a vibrant
+              and informative landing page for potential attendees.<br />
+              <br />
+
+              The AWS infrastructure supporting this registration site is both
+              robust and secure. User email signups are managed by an AWS Lambda
+              function sitting behind an API Gateway, ensuring scalability and
+              reliability. This Lambda function performs CRUD operations on a
+              list of user emails stored in a separate, secure S3 bucket,
+              maintaining data privacy and integrity. I also implemented a full
+              CI/CD pipeline for streamlined development and deployment
+              processes. This setup ensures that updates to the site and backend
+              services can be deployed efficiently and securely.
+            </p>
+            <div
+              style="
+                display: flex;
+                justify-content: center;
+                align-items: center;
+              "
             >
+              <a href="https://chattanooga-hackathon-2024.devopschad.com/"
+                >View Project</a
+              >
+            </div>
           </div>
           <!-- Add more projects as needed -->
         </div>
