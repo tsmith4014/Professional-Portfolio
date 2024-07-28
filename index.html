@@ -10,10 +10,17 @@
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
     />
     <style>
+      html,
       body {
-        font-family: Arial, sans-serif;
+        height: 100%;
         margin: 0;
         padding: 0;
+        overflow: auto; /* Ensure scrolling is enabled */
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+        font-family: Arial, sans-serif;
         background-color: #f4f4f4;
       }
       header {
@@ -23,9 +30,11 @@
         text-align: center;
       }
       .container {
+        flex: 1;
         width: 80%;
         margin: 0 auto;
-        overflow: hidden;
+        overflow: auto; /* Ensure scrolling is enabled */
+        padding-bottom: 60px; /* Add padding to accommodate the footer */
       }
       .main-content {
         padding: 20px;
@@ -40,14 +49,12 @@
         color: #333;
       }
       .projects {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: space-around;
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 20px;
       }
       .project {
-        flex: 0 0 45%;
         background: #eee;
-        margin: 10px 0;
         padding: 15px;
         border-radius: 5px;
         box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
@@ -57,8 +64,6 @@
         color: #fff;
         text-align: center;
         padding: 10px 0;
-        position: fixed;
-        bottom: 0;
         width: 100%;
       }
       a {
@@ -153,7 +158,167 @@
               >
             </div>
           </div>
-          <!-- Add more projects as needed -->
+          <!-- Placeholder projects -->
+          <div class="project">
+            <h3>Project Placeholder 1</h3>
+            <p>
+              Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer
+              nec odio. Praesent libero. Sed cursus ante dapibus diam.
+            </p>
+            <div
+              style="
+                display: flex;
+                justify-content: center;
+                align-items: center;
+              "
+            >
+              <a href="#">View Project</a>
+            </div>
+          </div>
+          <div class="project">
+            <h3>Project Placeholder 2</h3>
+            <p>
+              Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer
+              nec odio. Praesent libero. Sed cursus ante dapibus diam.
+            </p>
+            <div
+              style="
+                display: flex;
+                justify-content: center;
+                align-items: center;
+              "
+            >
+              <a href="#">View Project</a>
+            </div>
+          </div>
+          <div class="project">
+            <h3>Project Placeholder 3</h3>
+            <p>
+              Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer
+              nec odio. Praesent libero. Sed cursus ante dapibus diam.
+            </p>
+            <div
+              style="
+                display: flex;
+                justify-content: center;
+                align-items: center;
+              "
+            >
+              <a href="#">View Project</a>
+            </div>
+          </div>
+          <div class="project">
+            <h3>Project Placeholder 4</h3>
+            <p>
+              Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer
+              nec odio. Praesent libero. Sed cursus ante dapibus diam.
+            </p>
+            <div
+              style="
+                display: flex;
+                justify-content: center;
+                align-items: center;
+              "
+            >
+              <a href="#">View Project</a>
+            </div>
+          </div>
+          <div class="project">
+            <h3>Project Placeholder 5</h3>
+            <p>
+              Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer
+              nec odio. Praesent libero. Sed cursus ante dapibus diam.
+            </p>
+            <div
+              style="
+                display: flex;
+                justify-content: center;
+                align-items: center;
+              "
+            >
+              <a href="#">View Project</a>
+            </div>
+          </div>
+          <div class="project">
+            <h3>Project Placeholder 6</h3>
+            <p>
+              Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer
+              nec odio. Praesent libero. Sed cursus ante dapibus diam.
+            </p>
+            <div
+              style="
+                display: flex;
+                justify-content: center;
+                align-items: center;
+              "
+            >
+              <a href="#">View Project</a>
+            </div>
+          </div>
+          <div class="project">
+            <h3>Project Placeholder 7</h3>
+            <p>
+              Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer
+              nec odio. Praesent libero. Sed cursus ante dapibus diam.
+            </p>
+            <div
+              style="
+                display: flex;
+                justify-content: center;
+                align-items: center;
+              "
+            >
+              <a href="#">View Project</a>
+            </div>
+          </div>
+          <div class="project">
+            <h3>Project Placeholder 8</h3>
+            <p>
+              Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer
+              nec odio. Praesent libero. Sed cursus ante dapibus diam.
+            </p>
+            <div
+              style="
+                display: flex;
+                justify-content: center;
+                align-items: center;
+              "
+            >
+              <a href="#">View Project</a>
+            </div>
+          </div>
+          <div class="project">
+            <h3>Project Placeholder 9</h3>
+            <p>
+              Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer
+              nec odio. Praesent libero. Sed cursus ante dapibus diam.
+            </p>
+            <div
+              style="
+                display: flex;
+                justify-content: center;
+                align-items: center;
+              "
+            >
+              <a href="#">View Project</a>
+            </div>
+          </div>
+          <div class="project">
+            <h3>Project Placeholder 10</h3>
+            <p>
+              Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer
+              nec odio. Praesent libero. Sed cursus ante dapibus diam.
+            </p>
+            <div
+              style="
+                display: flex;
+                justify-content: center;
+                align-items: center;
+              "
+            >
+              <a href="#">View Project</a>
+            </div>
+          </div>
         </div>
       </div>
     </div>
