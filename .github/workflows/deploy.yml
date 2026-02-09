@@ -65,7 +65,9 @@ jobs:
           docker pull tsmith4014/career-backend:latest
           docker pull tsmith4014/career-page:latest
           docker stop backend frontend 2>/dev/null || true
-          docker rm backend frontend 2>/dev/null || true
+          docker rm -f backend frontend 2>/dev/null || true
+          docker ps -q --filter "publish=8001" | xargs -r docker stop 2>/dev/null || true
+          docker ps -q --filter "publish=8000" | xargs -r docker stop 2>/dev/null || true
           docker run -d --name backend --network my_network -p 8001:8001 \
             -e SPOTIFY_CLIENT_ID="${{ secrets.SPOTIFY_CLIENT_ID }}" \
             -e SPOTIFY_CLIENT_SECRET="${{ secrets.SPOTIFY_CLIENT_SECRET }}" \
