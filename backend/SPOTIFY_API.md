@@ -4,10 +4,12 @@
 
 With **Client Credentials** (app-only), Spotify often returns `preview_url: null`. With a **user token** (Sign in with Spotify), previews are usually available and are real 30-second clips with vocals.
 
-1. In [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) → your app → **Settings** → **Redirect URIs**, add **both** (Spotify allows multiple):
+1. In [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) → your app → **Settings** → **Redirect URIs**, add **each** URL where the app is served (Spotify allows multiple):
    - Local dev: **`http://127.0.0.1:5173/api/spotify/callback`**  
      (Spotify does **not** allow `localhost`—use `127.0.0.1`. Callback hits the frontend; Vite proxies `/api` to the backend.)
-   - Production: **`https://devopschad.com/api/spotify/callback`** (or `https://arcade.devopschad.com/api/spotify/callback` if you use a subdomain for the app). Use HTTPS.
+   - Production (main site): **`https://devopschad.com/api/spotify/callback`** and **`https://www.devopschad.com/api/spotify/callback`**
+   - Production (arcade subdomain): **`https://arcade.devopschad.com/api/spotify/callback`**  
+   The backend uses the request host for the callback URL, so every domain that serves the app must be listed here.
 2. In `backend/.env`: `SPOTIFY_REDIRECT_URI` is set for local dev. For production, set `SPOTIFY_REDIRECT_URI` and `FRONTEND_ORIGIN` to your live URL (e.g. `https://devopschad.com`).
 3. On the Name That Tune page, click **Sign in with Spotify**. After you approve, the game will use your token and fetch tracks with real preview URLs.
 

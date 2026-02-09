@@ -90,10 +90,14 @@ async def get_spotify_token(user_token: str | None = None) -> str | None:
         return r.json().get("access_token")
 
 
-def _redirect_uri() -> str:
-    # Spotify requires loopback as 127.0.0.1 or [::1], not localhost (as of 2025).
-    # Default to frontend origin so callback is reached via Vite proxy (browser never hits backend port).
-    return (os.environ.get("SPOTIFY_REDIRECT_URI") or "http://127.0.0.1:5173/api/spotify/callback").strip()
+def _redirect_uri_from_request(request: Request) -> str:
+    """Build callback URL from request host so Spotify works from both devopschad.com and arcade.devopschad.com."""
+    env_uri = (os.environ.get("SPOTIFY_REDIRECT_URI") or "").strip()
+    if env_uri:
+        return env_uri
+    scheme = request.headers.get("x-forwarded-proto") or request.url.scheme
+    host = request.headers.get("x-forwarded-host") or request.url.netloc
+    return f"{scheme}://{host}/api/spotify/callback"
 
 
 def _frontend_origin() -> str:
@@ -120,7 +124,7 @@ _session_tokens: dict[str, dict] = {}
 
 
 @app.get("/api/spotify/login")
-async def spotify_login(frontend_redirect: str | None = None):
+async def spotify_login(request: Request, frontend_redirect: str | None = None):
     """Redirect to Spotify to sign in. After auth, user is sent back to frontend with token in hash."""
     creds = _get_spotify_credentials()
     if not creds:
@@ -128,7 +132,7 @@ async def spotify_login(frontend_redirect: str | None = None):
     client_id, _ = creds
     state = secrets.token_urlsafe(16)
     _oauth_states.add(state)
-    redirect = _redirect_uri()
+    redirect = _redirect_uri_from_request(request)
     params = {
         "response_type": "code",
         "client_id": client_id,
@@ -168,13 +172,14 @@ async def spotify_callback(
     if not creds:
         return RedirectResponse(url=f"{frontend}#error=config")
     client_id, client_secret = creds
+    redirect_uri = _redirect_uri_from_request(request)
     async with httpx.AsyncClient() as client:
         r = await client.post(
             "https://accounts.spotify.com/api/token",
             data={
                 "grant_type": "authorization_code",
                 "code": code,
-                "redirect_uri": _redirect_uri(),
+                "redirect_uri": redirect_uri,
             },
             auth=(client_id, client_secret),
             headers={"Content-Type": "application/x-www-form-urlencoded"},
@@ -390,13 +395,13 @@ async def health():
 
 
 @app.get("/api/debug")
-async def debug():
+async def debug(request: Request):
     """Check if Spotify credentials are visible to the backend (no secrets exposed)."""
     creds = _get_spotify_credentials()
     return {
         "has_credentials": creds is not None,
-        "redirect_uri": _redirect_uri(),
-        "hint": "Add this exact Redirect URI in Spotify Dashboard → Your app → Settings → Redirect URIs",
+        "redirect_uri": _redirect_uri_from_request(request),
+        "hint": "Add this exact Redirect URI (and arcade/devopschad variants if used) in Spotify Dashboard → Your app → Settings → Redirect URIs",
     }
 
 

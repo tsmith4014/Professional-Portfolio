@@ -47,11 +47,14 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.ORACLE_SSH_PRIVATE_KEY }}
 
-      - name: Copy host nginx config to Oracle instance
+      - name: Copy host nginx configs to Oracle instance
         run: |
           scp -o StrictHostKeyChecking=no \
             nginx/host-arcade.devopschad.com.conf \
             ${{ secrets.ORACLE_USERNAME }}@${{ secrets.ORACLE_HOST }}:/tmp/arcade.devopschad.com.conf
+          scp -o StrictHostKeyChecking=no \
+            nginx/host-expenseapp.conf \
+            ${{ secrets.ORACLE_USERNAME }}@${{ secrets.ORACLE_HOST }}:/tmp/expenseapp
 
       - name: Deploy to Oracle instance
         env:
@@ -66,8 +69,6 @@ jobs:
           docker pull tsmith4014/career-page:latest
           docker stop backend frontend 2>/dev/null || true
           docker rm -f backend frontend 2>/dev/null || true
-          docker ps -q --filter "publish=8001" | xargs -r docker stop 2>/dev/null || true
-          docker ps -q --filter "publish=8000" | xargs -r docker stop 2>/dev/null || true
           docker run -d --name backend --network my_network -p 8001:8001 \
             -e SPOTIFY_CLIENT_ID="${{ secrets.SPOTIFY_CLIENT_ID }}" \
             -e SPOTIFY_CLIENT_SECRET="${{ secrets.SPOTIFY_CLIENT_SECRET }}" \
@@ -76,10 +77,14 @@ jobs:
             tsmith4014/career-backend:latest
           docker run -d --name frontend --network my_network -p 8000:8000 \
             tsmith4014/career-page:latest
-          # Apply host nginx config (so we don't have to configure it manually on the host)
+          # Apply host nginx configs (arcade + main site devopschad.com in expenseapp)
           if [ -f /tmp/arcade.devopschad.com.conf ]; then
             sudo cp /tmp/arcade.devopschad.com.conf /etc/nginx/sites-available/arcade.devopschad.com.conf
             sudo ln -sf /etc/nginx/sites-available/arcade.devopschad.com.conf /etc/nginx/sites-enabled/
-            sudo nginx -t 2>/dev/null && sudo systemctl reload nginx 2>/dev/null || true
           fi
+          if [ -f /tmp/expenseapp ]; then
+            sudo cp /tmp/expenseapp /etc/nginx/sites-available/expenseapp
+            sudo ln -sf /etc/nginx/sites-available/expenseapp /etc/nginx/sites-enabled/
+          fi
+          sudo nginx -t 2>/dev/null && sudo systemctl reload nginx 2>/dev/null || true
           ENDSSH
