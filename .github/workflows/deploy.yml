@@ -19,11 +19,17 @@ jobs:
       - name: Log in to Docker Hub
         run: echo "${{ secrets.DOCKER_HUB_TOKEN }}" | docker login -u "${{ secrets.DOCKER_HUB_USERNAME }}" --password-stdin
 
-      - name: Build and tag Docker image
+      - name: Build and tag frontend image
         run: docker build -t tsmith4014/career-page:latest .
 
-      - name: Push Docker image to Docker Hub
+      - name: Build and tag backend image
+        run: docker build -t tsmith4014/career-backend:latest ./backend
+
+      - name: Push frontend image to Docker Hub
         run: docker push tsmith4014/career-page:latest
+
+      - name: Push backend image to Docker Hub
+        run: docker push tsmith4014/career-backend:latest
 
   deploy:
     runs-on: ubuntu-latest
@@ -41,12 +47,37 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.ORACLE_SSH_PRIVATE_KEY }}
 
-      - name: Deploy to Oracle instance
+      - name: Copy host nginx config to Oracle instance
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.ORACLE_USERNAME }}@${{ secrets.ORACLE_HOST }} << 'EOF'
+          scp -o StrictHostKeyChecking=no \
+            nginx/host-arcade.devopschad.com.conf \
+            ${{ secrets.ORACLE_USERNAME }}@${{ secrets.ORACLE_HOST }}:/tmp/arcade.devopschad.com.conf
+
+      - name: Deploy to Oracle instance
+        env:
+          SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+          SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.ORACLE_USERNAME }}@${{ secrets.ORACLE_HOST }} << ENDSSH
+          set -e
           echo "${{ secrets.DOCKER_HUB_TOKEN }}" | docker login -u "${{ secrets.DOCKER_HUB_USERNAME }}" --password-stdin
+          docker network create my_network 2>/dev/null || true
+          docker pull tsmith4014/career-backend:latest
           docker pull tsmith4014/career-page:latest
-          docker stop $(docker ps -q --filter name=backend1) || true
-          docker rm $(docker ps -aq --filter name=backend1) || true
-          docker run -d -p 8000:8000 --name backend1 --network my_network tsmith4014/career-page:latest
-          EOF
+          docker stop backend frontend 2>/dev/null || true
+          docker rm backend frontend 2>/dev/null || true
+          docker run -d --name backend --network my_network -p 8001:8001 \
+            -e SPOTIFY_CLIENT_ID="${{ secrets.SPOTIFY_CLIENT_ID }}" \
+            -e SPOTIFY_CLIENT_SECRET="${{ secrets.SPOTIFY_CLIENT_SECRET }}" \
+            -e SPOTIFY_REDIRECT_URI="https://arcade.devopschad.com/api/spotify/callback" \
+            -e FRONTEND_ORIGIN="https://arcade.devopschad.com" \
+            tsmith4014/career-backend:latest
+          docker run -d --name frontend --network my_network -p 8000:8000 \
+            tsmith4014/career-page:latest
+          # Apply host nginx config (so we don't have to configure it manually on the host)
+          if [ -f /tmp/arcade.devopschad.com.conf ]; then
+            sudo cp /tmp/arcade.devopschad.com.conf /etc/nginx/sites-available/arcade.devopschad.com.conf
+            sudo ln -sf /etc/nginx/sites-available/arcade.devopschad.com.conf /etc/nginx/sites-enabled/
+            sudo nginx -t 2>/dev/null && sudo systemctl reload nginx 2>/dev/null || true
+          fi
+          ENDSSH

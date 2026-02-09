@@ -1,7 +1,7 @@
-.gitignore
-Dockerfile
-.dockerignore
-README.md
-READMEtwodomainNginx.md
-cmds
-
+node_modules
+dist
+.git
+.github
+*.md
+.env*
+.DS_Store

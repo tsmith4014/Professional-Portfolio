@@ -1,13 +1,21 @@
-# Stage 1: Build Stage
-FROM node:14-alpine AS build-stage
-WORKDIR /app
-# COPY home.html /app
-# COPY favicon.ico /app
-COPY . /app
+# Build stage
+FROM node:20-alpine AS builder
 
-# Stage 2: Final Stage
+WORKDIR /app
+
+COPY package.json package-lock.json* ./
+RUN npm ci
+
+COPY . .
+RUN npm run build
+
+# Serve on 8000 to match existing Oracle deployment
 FROM nginx:alpine
-COPY --from=build-stage /app /usr/share/nginx/html
+
+COPY --from=builder /app/dist /usr/share/nginx/html
+COPY 50x.html /usr/share/nginx/html/
 COPY nginx/nginx.conf /etc/nginx/conf.d/default.conf
+
 EXPOSE 8000
+
 CMD ["nginx", "-g", "daemon off;"]
