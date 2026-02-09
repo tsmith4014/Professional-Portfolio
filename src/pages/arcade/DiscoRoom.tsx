@@ -1,5 +1,13 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
+
+const PANEL_DEFAULT_W = 420
+const PANEL_DEFAULT_H = 640
+const PANEL_MIN_W = 300
+const PANEL_MIN_H = 400
+const BOUNCE = 0.6
+const FRICTION = 0.98
+const TOSS_MULT = 0.4
 
 const SPOTIFY_TOKEN_KEY = 'spotify_access_token'
 const DEFAULT_PLAYLIST_ID = '37i9dQZF1DXa8NOEUWPn9W'
@@ -42,13 +50,56 @@ export function DiscoRoom() {
   const [sdkDeviceId, setSdkDeviceId] = useState<string | null>(null)
   const [premiumError, setPremiumError] = useState<string | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
+  const [panelVisible, setPanelVisible] = useState(true)
+  const [panelPos, setPanelPos] = useState({ x: 0, y: 0 })
+  const [panelSize, setPanelSize] = useState({ w: PANEL_DEFAULT_W, h: PANEL_DEFAULT_H })
+  const [panelVelocity, setPanelVelocity] = useState({ vx: 0, vy: 0 })
+  const [showBtnPos, setShowBtnPos] = useState({ x: 0, y: 0 })
+  const [showBtnVel, setShowBtnVel] = useState({ vx: 0, vy: 0 })
+  const showBtnBounceRef = useRef<number | null>(null)
+  const showBtnJetRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const showBtnDragRef = useRef<{ x: number; y: number; startX: number; startY: number } | null>(null)
+  const showBtnWasDraggingRef = useRef(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const beatSyncRef = useRef<BeatSync>(beatSync)
   const playerRef = useRef<SpotifyPlayer | null>(null)
+  const dragStartRef = useRef<{ x: number; y: number; px: number; py: number } | null>(null)
+  const lastMoveRef = useRef<{ x: number; y: number; t: number }[]>([])
+  const physicsRef = useRef<number | null>(null)
+  const resizingRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null)
+  const panelInitialized = useRef(false)
   beatSyncRef.current = beatSync
 
-  const token =
+  // Center panel on first mount / when viewport is known
+  useEffect(() => {
+    if (panelInitialized.current) return
+    panelInitialized.current = true
+    const place = () => {
+      setPanelPos({
+        x: Math.max(0, (window.innerWidth - PANEL_DEFAULT_W) / 2),
+        y: Math.max(0, (window.innerHeight - PANEL_DEFAULT_H) / 2),
+      })
+    }
+    place()
+    window.addEventListener('resize', place)
+    return () => window.removeEventListener('resize', place)
+  }, [])
+
+  const [token, setToken] = useState<string | null>(() =>
     typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(SPOTIFY_TOKEN_KEY) : null
+  )
+
+  // Read OAuth redirect hash (Sign in from Disco Room returns here with #access_token=...)
+  useEffect(() => {
+    const hash = window.location.hash.slice(1)
+    if (!hash) return
+    const params = Object.fromEntries(new URLSearchParams(hash))
+    if (params.access_token) {
+      if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(SPOTIFY_TOKEN_KEY, params.access_token)
+      setToken(params.access_token)
+      window.history.replaceState(null, '', window.location.pathname + window.location.search)
+    }
+  }, [])
 
   const handleLoadPlaylist = () => {
     const id = parsePlaylistId(playlistInput)
@@ -303,26 +354,245 @@ export function DiscoRoom() {
     }
   }, [bpm, token])
 
-  const openInSpotifyUrl = `https://open.spotify.com/playlist/${playlistId}`
+  const panelPosRef = useRef(panelPos)
+  const panelVelRef = useRef(panelVelocity)
+  panelPosRef.current = panelPos
+  panelVelRef.current = panelVelocity
+
+  // Bounce physics when panel is tossed
+  useEffect(() => {
+    const step = () => {
+      const { x, y } = panelPosRef.current
+      let { vx, vy } = panelVelRef.current
+      if (Math.abs(vx) < 0.3 && Math.abs(vy) < 0.3) return
+      const W = window.innerWidth
+      const H = window.innerHeight
+      const { w, h } = panelSize
+      let nx = x + vx
+      let ny = y + vy
+      if (nx < 0) { nx = 0; vx = -vx * BOUNCE }
+      if (nx + w > W) { nx = W - w; vx = -vx * BOUNCE }
+      if (ny < 0) { ny = 0; vy = -vy * BOUNCE }
+      if (ny + h > H) { ny = H - h; vy = -vy * BOUNCE }
+      vx *= FRICTION
+      vy *= FRICTION
+      setPanelPos({ x: nx, y: ny })
+      setPanelVelocity({ vx, vy })
+      if (Math.abs(vx) >= 0.3 || Math.abs(vy) >= 0.3) physicsRef.current = requestAnimationFrame(step)
+    }
+    if (Math.abs(panelVelocity.vx) >= 0.3 || Math.abs(panelVelocity.vy) >= 0.3)
+      physicsRef.current = requestAnimationFrame(step)
+    return () => { if (physicsRef.current) cancelAnimationFrame(physicsRef.current) }
+  }, [panelVelocity.vx, panelVelocity.vy, panelSize.w, panelSize.h])
+
+  const handlePanelPointerDown = useCallback((e: React.PointerEvent) => {
+    if ((e.target as HTMLElement).closest('.disco-resize-handle')) return
+    if ((e.target as HTMLElement).closest('.disco-hide-btn')) return
+    if ((e.target as HTMLElement).closest('a')) return
+    if (!(e.target as HTMLElement).closest('.disco-drag-handle')) return
+    e.preventDefault()
+    dragStartRef.current = { x: e.clientX, y: e.clientY, px: panelPos.x, py: panelPos.y }
+    lastMoveRef.current = [{ x: e.clientX, y: e.clientY, t: Date.now() }]
+    ;(e.target as HTMLElement).setPointerCapture?.(e.pointerId)
+  }, [panelPos])
+
+  const handlePanelPointerMove = useCallback((e: React.PointerEvent) => {
+    if (resizingRef.current) {
+      const { w: startW, h: startH, x: startX, y: startY } = resizingRef.current
+      setPanelSize({
+        w: Math.max(PANEL_MIN_W, Math.min(600, startW + (e.clientX - startX))),
+        h: Math.max(PANEL_MIN_H, Math.min(800, startH + (e.clientY - startY))),
+      })
+      return
+    }
+    if (!dragStartRef.current) return
+    const dx = e.clientX - dragStartRef.current.x
+    const dy = e.clientY - dragStartRef.current.y
+    setPanelPos({ x: dragStartRef.current.px + dx, y: dragStartRef.current.py + dy })
+    lastMoveRef.current = [...lastMoveRef.current.slice(-4), { x: e.clientX, y: e.clientY, t: Date.now() }]
+  }, [])
+
+  const handlePanelPointerUp = useCallback((e: React.PointerEvent) => {
+    ;(e.target as HTMLElement).releasePointerCapture?.(e.pointerId)
+    if (resizingRef.current) {
+      resizingRef.current = null
+      return
+    }
+    if (!dragStartRef.current) return
+    const moves = lastMoveRef.current
+    dragStartRef.current = null
+    if (moves.length >= 2) {
+      const last = moves[moves.length - 1]
+      const prev = moves[moves.length - 2]
+      const dt = (last.t - prev.t) / 1000
+      if (dt > 0) {
+        const vx = ((last.x - prev.x) * TOSS_MULT) / dt
+        const vy = ((last.y - prev.y) * TOSS_MULT) / dt
+        setPanelVelocity({ vx, vy })
+      }
+    }
+  }, [])
+
+  const handleResizePointerDown = useCallback((e: React.PointerEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    resizingRef.current = { x: e.clientX, y: e.clientY, w: panelSize.w, h: panelSize.h }
+    ;(e.target as HTMLElement).setPointerCapture?.(e.pointerId)
+  }, [panelSize])
+
+  // When panel is first hidden, place "Show controls" button at bottom-right
+  useEffect(() => {
+    if (!panelVisible && showBtnPos.x === 0 && showBtnPos.y === 0) {
+      setShowBtnPos({
+        x: Math.max(0, window.innerWidth - 180),
+        y: Math.max(0, window.innerHeight - 52),
+      })
+    }
+  }, [panelVisible, showBtnPos.x, showBtnPos.y])
+
+  const showBtnPosRef = useRef(showBtnPos)
+  const showBtnVelRef = useRef(showBtnVel)
+  showBtnPosRef.current = showBtnPos
+  showBtnVelRef.current = showBtnVel
+
+  // Bounce physics for "Show controls" button when panel is hidden (runs continuously so jet velocity is applied)
+  useEffect(() => {
+    if (panelVisible) return
+    const btnW = 140
+    const btnH = 44
+    const step = () => {
+      if (showBtnDragRef.current) {
+        showBtnBounceRef.current = requestAnimationFrame(step)
+        return
+      }
+      const { x, y } = showBtnPosRef.current
+      let { vx, vy } = showBtnVelRef.current
+      const W = window.innerWidth
+      const H = window.innerHeight
+      let nx = x + vx
+      let ny = y + vy
+      if (nx < 0) { nx = 0; vx = -vx * BOUNCE }
+      if (nx + btnW > W) { nx = W - btnW; vx = -vx * BOUNCE }
+      if (ny < 0) { ny = 0; vy = -vy * BOUNCE }
+      if (ny + btnH > H) { ny = H - btnH; vy = -vy * BOUNCE }
+      vx *= FRICTION
+      vy *= FRICTION
+      setShowBtnPos({ x: nx, y: ny })
+      setShowBtnVel({ vx, vy })
+      showBtnBounceRef.current = requestAnimationFrame(step)
+    }
+    showBtnBounceRef.current = requestAnimationFrame(step)
+    return () => {
+      if (showBtnBounceRef.current) cancelAnimationFrame(showBtnBounceRef.current)
+    }
+  }, [panelVisible])
+
+  // Random "jet" every 60–120s for Show controls button (like a baseball bat hit)
+  useEffect(() => {
+    if (panelVisible) return
+    const schedule = () => {
+      const delay = 60000 + Math.random() * 60000 // 60–120 s
+      const t = setTimeout(() => {
+        setShowBtnVel(v => ({
+          vx: v.vx + (Math.random() - 0.5) * 24,
+          vy: v.vy + (Math.random() - 0.5) * 24,
+        }))
+        schedule()
+      }, delay)
+      showBtnJetRef.current = t
+    }
+    schedule()
+    return () => {
+      if (showBtnJetRef.current) clearTimeout(showBtnJetRef.current)
+    }
+  }, [panelVisible])
+
+  const handleShowBtnPointerDown = useCallback((e: React.PointerEvent) => {
+    e.stopPropagation()
+    showBtnDragRef.current = { x: e.clientX, y: e.clientY, startX: showBtnPos.x, startY: showBtnPos.y }
+    ;(e.target as HTMLElement).setPointerCapture?.(e.pointerId)
+  }, [showBtnPos])
+
+  useEffect(() => {
+    if (!showBtnDragRef.current) return
+    const onMove = (e: PointerEvent) => {
+      const d = showBtnDragRef.current
+      if (!d) return
+      showBtnWasDraggingRef.current = true
+      setShowBtnPos({
+        x: Math.max(0, Math.min(window.innerWidth - 140, d.startX + (e.clientX - d.x))),
+        y: Math.max(0, Math.min(window.innerHeight - 44, d.startY + (e.clientY - d.y))),
+      })
+    }
+    const onUp = () => {
+      showBtnDragRef.current = null
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+    }
+  }, [])
 
   return (
     <div className="disco-page">
       <canvas ref={canvasRef} className="disco-canvas" aria-hidden="true" />
-      <div className="disco-content">
-        <header className="disco-header">
-          <Link to="/arcade" className="disco-back">← Arcade</Link>
-          <h1 className="disco-title">Disco Room</h1>
-          <p className="disco-sub">
-            {token
-              ? 'Lights can sync to the beat when you play from Spotify (embed or app).'
-              : 'Sign in with Spotify (from Name That Tune) to sync lights to the beat; otherwise use BPM.'}
-          </p>
-        </header>
 
-        <div className="disco-notice">
-          <p><strong>Full songs in-browser</strong> need Spotify <strong>Premium</strong> and the player below. The embed is 30s previews only.</p>
-          <p>For full tracks without Premium: <a href={openInSpotifyUrl} target="_blank" rel="noopener noreferrer" className="disco-open-link">Open in Spotify →</a></p>
+      {!panelVisible && (
+        <button
+          type="button"
+          className="disco-show-panel-btn"
+          style={{ left: showBtnPos.x, top: showBtnPos.y }}
+          onClick={() => {
+            if (showBtnWasDraggingRef.current) {
+              showBtnWasDraggingRef.current = false
+              return
+            }
+            setPanelVisible(true)
+          }}
+          onPointerDown={handleShowBtnPointerDown}
+          aria-label="Show controls"
+        >
+          Show controls
+        </button>
+      )}
+
+      <div
+        className={`disco-content disco-panel ${!panelVisible ? 'disco-panel--minimized' : ''}`}
+        style={{
+          left: panelPos.x,
+          top: panelPos.y,
+          width: panelSize.w,
+          height: panelSize.h,
+        }}
+        onPointerDown={handlePanelPointerDown}
+        onPointerMove={handlePanelPointerMove}
+        onPointerUp={handlePanelPointerUp}
+        onPointerLeave={handlePanelPointerUp}
+      >
+        <div className="disco-drag-handle" title="Drag to move, toss to bounce">
+          <span className="disco-drag-grip" aria-hidden>⋮⋮</span>
+          <Link to="/arcade" className="disco-back">← Arcade</Link>
+          <span className="disco-panel-title">Disco Room</span>
+          {!token && (
+            <a href={typeof window !== 'undefined' ? `/api/spotify/login?frontend_redirect=${encodeURIComponent(window.location.origin + '/arcade/spotify-full')}` : '#'} className="disco-header-signin">Sign in</a>
+          )}
+          <button type="button" className="disco-hide-btn" onClick={() => setPanelVisible(false)} title="Hide panel">−</button>
         </div>
+
+        {!token ? (
+          <div className="disco-full-songs-cta">
+            <p><strong>Full songs</strong> in the app need Spotify Premium and a sign-in.</p>
+            <a
+              href={typeof window !== 'undefined' ? `/api/spotify/login?frontend_redirect=${encodeURIComponent(window.location.origin + '/arcade/spotify-full')}` : '#'}
+              className="disco-signin-btn"
+            >
+              Sign in with Spotify
+            </a>
+            <p className="disco-full-songs-note">After sign-in, use &quot;Play playlist&quot; and the controls above the embed for full playback.</p>
+          </div>
+        ) : null}
 
         {premiumError && (
           <div className="disco-premium-err">{premiumError}</div>
@@ -379,24 +649,64 @@ export function DiscoRoom() {
             className="disco-embed"
           />
         </div>
+        <div
+          className="disco-resize-handle"
+          onPointerDown={handleResizePointerDown}
+          onPointerMove={handlePanelPointerMove}
+          onPointerUp={handlePanelPointerUp}
+          onPointerLeave={handlePanelPointerUp}
+          aria-label="Resize panel"
+        />
       </div>
 
       <style>{`
         .disco-page { position: relative; min-height: 100vh; overflow: hidden; }
         .disco-canvas { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; }
-        .disco-content { position: relative; z-index: 1; padding: 1.5rem 1.25rem 2rem; max-width: 26rem; margin: 0 auto; background: rgba(0,0,0,0.35); border-radius: 16px; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
-        .disco-header { text-align: center; margin-bottom: 1rem; }
-        .disco-back { font-size: 0.9rem; color: var(--text-muted); display: inline-block; margin-bottom: 0.5rem; }
-        .disco-back:hover { color: var(--arcade); }
-        .disco-title { font-size: 1.75rem; margin: 0 0 0.25rem; color: var(--arcade); font-weight: 700; }
-        .disco-sub { font-size: 0.8rem; color: var(--text-muted); margin: 0; }
-        .disco-notice {
-          background: rgba(0,0,0,0.5); border: 1px solid var(--border); border-radius: 8px;
-          padding: 0.6rem 0.9rem; margin-bottom: 1rem; font-size: 0.8rem; color: var(--text-muted);
+        .disco-show-panel-btn {
+          position: fixed; z-index: 10;
+          padding: 0.6rem 1rem; background: var(--arcade); border: none; border-radius: 999px;
+          color: var(--bg); font-weight: 600; font-size: 0.9rem; cursor: grab; font-family: var(--font);
+          box-shadow: 0 4px 20px rgba(0,0,0,0.3);
         }
-        .disco-notice p { margin: 0 0 0.4rem; }
-        .disco-open-link { color: var(--arcade); font-weight: 600; }
-        .disco-open-link:hover { text-decoration: underline; }
+        .disco-show-panel-btn:hover { opacity: 0.95; transform: scale(1.02); }
+        .disco-show-panel-btn:active { cursor: grabbing; }
+        .disco-panel { position: fixed; z-index: 5; display: flex; flex-direction: column; overflow: hidden; border-radius: 16px; box-sizing: border-box; }
+        .disco-panel--minimized { visibility: hidden; pointer-events: none; }
+        .disco-content { position: relative; z-index: 1; padding: 0 1.25rem 1.5rem; padding-top: 0; flex: 1; display: flex; flex-direction: column; overflow: auto; background: rgba(0,0,0,0.35); border-radius: 16px; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
+        .disco-drag-handle {
+          display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; cursor: grab; user-select: none;
+          background: linear-gradient(180deg, rgba(255,107,157,0.25) 0%, rgba(0,0,0,0.4) 100%);
+          border: 2px solid rgba(255,107,157,0.5); border-bottom-width: 3px;
+          border-radius: 16px 16px 0 0;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.1);
+        }
+        .disco-drag-handle:active { cursor: grabbing; }
+        .disco-drag-grip { color: var(--arcade); font-size: 0.9rem; opacity: 0.9; margin-right: 0.25rem; }
+        .disco-header-signin { font-size: 0.85rem; font-weight: 600; color: var(--arcade); margin-right: 0.5rem; text-decoration: none; }
+        .disco-header-signin:hover { text-decoration: underline; }
+        .disco-panel-title { font-weight: 700; color: var(--arcade); font-size: 1rem; flex: 1; }
+        .disco-hide-btn { width: 28px; height: 28px; padding: 0; border: none; border-radius: 6px; background: rgba(255,255,255,0.1); color: var(--text); font-size: 1.2rem; line-height: 1; cursor: pointer; }
+        .disco-hide-btn:hover { background: rgba(255,255,255,0.2); }
+        .disco-resize-handle {
+          position: absolute; right: 0; bottom: 0; width: 24px; height: 24px; cursor: nwse-resize;
+          background: linear-gradient(135deg, transparent 50%, rgba(255,255,255,0.2) 50%);
+          border-radius: 0 0 12px 0;
+        }
+        .disco-resize-handle:hover { background: linear-gradient(135deg, transparent 50%, rgba(255,107,157,0.4) 50%); }
+        .disco-back { font-size: 0.9rem; color: var(--text-muted); }
+        .disco-back:hover { color: var(--arcade); }
+        .disco-full-songs-cta {
+          margin-bottom: 1rem; padding: 0.75rem 1rem; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,107,157,0.4);
+          border-radius: 10px; font-size: 0.85rem; color: var(--text-muted);
+        }
+        .disco-full-songs-cta p { margin: 0 0 0.5rem; }
+        .disco-full-songs-cta p:last-child { margin-bottom: 0; }
+        .disco-signin-btn {
+          display: inline-block; padding: 0.5rem 1rem; background: var(--arcade); color: var(--bg); font-weight: 600;
+          border-radius: 8px; text-decoration: none; font-size: 0.9rem; margin-top: 0.25rem;
+        }
+        .disco-signin-btn:hover { opacity: 0.95; }
+        .disco-full-songs-note { font-size: 0.8rem; opacity: 0.9; margin-top: 0.5rem; }
         .disco-premium-err { font-size: 0.8rem; color: #e74c3c; margin-bottom: 0.75rem; padding: 0.4rem 0; }
         .disco-sdk-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-bottom: 1rem; padding: 0.6rem; background: rgba(0,0,0,0.4); border-radius: 10px; border: 1px solid var(--arcade); }
         .disco-sdk-label { font-size: 0.75rem; color: var(--text-muted); margin-right: 0.25rem; }

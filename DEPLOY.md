@@ -8,6 +8,8 @@ The repo name comes from **this folder’s** `git remote -v` (e.g. `origin` → 
 
 **Why does Actions show “0 workflow runs”?** That means **no runs have executed yet**, not that the workflow is missing. The workflow file lives in `.github/workflows/deploy.yml` — that path is correct. In the Actions tab, use the left sidebar: under “All workflows” you should see **CI/CD Pipeline** (the workflow). Click it to see the definition; “0 workflow runs” is the list of past runs. After you push to `main`, the first run will appear there.
 
+**To trigger the workflow:** Push to `main` from somewhere GitHub is authenticated (e.g. your terminal: `git push origin main`). Cursor’s environment usually cannot push. Ensure the repo has the required **Actions secrets** (DOCKER_HUB_*, ORACLE_*, SPOTIFY_*) or the workflow will fail at build/deploy.
+
 ### Push without triggering the workflow
 
 The workflow runs **only when you push to the `main` branch**. To push your changes to GitHub **without** starting a deploy:
