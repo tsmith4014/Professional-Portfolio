@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 
-const games = [
+const games: { slug: string; name: string; desc: string; icon: string; comingSoon?: boolean }[] = [
   {
     slug: 'name-that-tune',
     name: 'Name That Tune',
