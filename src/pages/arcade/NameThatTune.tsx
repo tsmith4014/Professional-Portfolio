@@ -172,7 +172,8 @@ export function NameThatTune() {
     if (ctrl?.loadUri && track?.id) ctrl.loadUri(`spotify:track:${track.id}`)
   }, [track?.id])
 
-  // Spotify Embed iframe API: set callback first, then load script so we never miss the ready event
+  // Spotify Embed iframe API: set callback first, then load script so we never miss the ready event.
+  // Always append script so we get the callback even when script was already on page (e.g. cached or other route).
   useEffect(() => {
     window.onSpotifyIframeApiReady = (IFrameAPI) => {
       const el = embedContainerRef.current
@@ -186,12 +187,10 @@ export function NameThatTune() {
         }
       )
     }
-    if (!document.querySelector('script[src*="embed/iframe-api"]')) {
-      const script = document.createElement('script')
-      script.src = 'https://open.spotify.com/embed/iframe-api/v1'
-      script.async = true
-      document.body.appendChild(script)
-    }
+    const script = document.createElement('script')
+    script.src = 'https://open.spotify.com/embed/iframe-api/v1'
+    script.async = true
+    document.body.appendChild(script)
     return () => {
       window.onSpotifyIframeApiReady = undefined
       const ctrl = embedControllerRef.current
@@ -202,16 +201,24 @@ export function NameThatTune() {
   }, [])
 
   const handlePlayPreview = useCallback(() => {
-    const ctrl = embedControllerRef.current
-    if (!ctrl) return
+    console.log('[NameThatTune] Play button clicked')
     setPlayFeedback(true)
     setTimeout(() => setPlayFeedback(false), 800)
-    if (typeof ctrl.resume === 'function') {
-      ctrl.resume()
-    } else if (typeof (ctrl as SpotifyEmbedController & { togglePlay?: () => void }).togglePlay === 'function') {
-      ;(ctrl as SpotifyEmbedController & { togglePlay: () => void }).togglePlay!()
-    } else if (typeof ctrl.play === 'function') {
-      ctrl.play()
+    const ctrl = embedControllerRef.current
+    if (!ctrl) {
+      console.warn('[NameThatTune] Play clicked but embed controller is null')
+      return
+    }
+    try {
+      if (typeof ctrl.resume === 'function') {
+        ctrl.resume()
+      } else if (typeof (ctrl as SpotifyEmbedController & { togglePlay?: () => void }).togglePlay === 'function') {
+        ;(ctrl as SpotifyEmbedController & { togglePlay: () => void }).togglePlay()
+      } else if (typeof ctrl.play === 'function') {
+        ctrl.play()
+      }
+    } catch (e) {
+      console.error('[NameThatTune] Play failed:', e)
     }
   }, [])
 
@@ -381,6 +388,8 @@ export function NameThatTune() {
         .ntt-title { font-size: 1.5rem; margin: 0 0 0.25rem; color: var(--arcade); }
         .ntt-desc { color: var(--text-muted); font-size: 0.9rem; margin: 0 0 1.5rem; }
         .ntt-play {
+          position: relative;
+          z-index: 2;
           display: inline-block;
           padding: 0.6rem 1.2rem;
           background: var(--surface);
@@ -394,14 +403,15 @@ export function NameThatTune() {
         }
         .ntt-play:hover:not(:disabled) { border-color: var(--arcade); }
         .ntt-play:disabled { opacity: 0.6; cursor: default; }
-        .ntt-embed-wrap { margin: 1rem 0; min-height: 80px; }
+        .ntt-embed-wrap { position: relative; margin: 1rem 0; min-height: 80px; }
         .ntt-embed-wrap.ntt-embed-wrap--hidden { display: none; }
         .ntt-mystery-wrap { position: relative; width: 100%; max-width: 340px; margin: 0 auto; border-radius: 12px; overflow: hidden; }
         .ntt-mystery-overlay {
-          position: absolute; left: 0; top: 0; bottom: 0; width: 58%;
-          border-radius: 12px 0 0 12px;
+          position: absolute; inset: 0; border-radius: 12px;
           backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
           background: rgba(0,0,0,0.4);
+          -webkit-mask-image: radial-gradient(circle at 88% 72%, transparent 56px, black 56px);
+          mask-image: radial-gradient(circle at 88% 72%, transparent 56px, black 56px);
           pointer-events: none;
           transition: opacity 0.45s ease;
         }
