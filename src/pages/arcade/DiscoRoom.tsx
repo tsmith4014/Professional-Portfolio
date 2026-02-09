@@ -1,13 +1,24 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 
-const PANEL_DEFAULT_W = 420
-const PANEL_DEFAULT_H = 640
-const PANEL_MIN_W = 300
-const PANEL_MIN_H = 400
+const PANEL_DEFAULT_W = 340
+const PANEL_DEFAULT_H = 420
+const PANEL_MIN_W = 280
+const PANEL_MIN_H = 320
+const SHOW_BTN_MARGIN = 6
 const BOUNCE = 0.6
 const FRICTION = 0.98
 const TOSS_MULT = 0.4
+const SHOW_BTN_W = 140
+const SHOW_BTN_H = 44
+
+function visibleViewport(): { w: number; h: number } {
+  if (typeof document === 'undefined') return { w: 800, h: 600 }
+  return {
+    w: document.documentElement.clientWidth,
+    h: document.documentElement.clientHeight,
+  }
+}
 
 const SPOTIFY_TOKEN_KEY = 'spotify_access_token'
 const DEFAULT_PLAYLIST_ID = '37i9dQZF1DXa8NOEUWPn9W'
@@ -70,14 +81,15 @@ export function DiscoRoom() {
   const panelInitialized = useRef(false)
   beatSyncRef.current = beatSync
 
-  // Center panel on first mount / when viewport is known
+  // Center panel on first mount within visible viewport
   useEffect(() => {
     if (panelInitialized.current) return
     panelInitialized.current = true
     const place = () => {
+      const { w: W, h: H } = visibleViewport()
       setPanelPos({
-        x: Math.max(0, (window.innerWidth - PANEL_DEFAULT_W) / 2),
-        y: Math.max(0, (window.innerHeight - PANEL_DEFAULT_H) / 2),
+        x: Math.max(0, Math.min(W - PANEL_DEFAULT_W, (W - PANEL_DEFAULT_W) / 2)),
+        y: Math.max(0, Math.min(H - PANEL_DEFAULT_H, (H - PANEL_DEFAULT_H) / 2)),
       })
     }
     place()
@@ -359,14 +371,13 @@ export function DiscoRoom() {
   panelPosRef.current = panelPos
   panelVelRef.current = panelVelocity
 
-  // Bounce physics when panel is tossed
+  // Bounce physics when panel is tossed; use visible viewport so panel never gets stuck off-screen
   useEffect(() => {
     const step = () => {
       const { x, y } = panelPosRef.current
       let { vx, vy } = panelVelRef.current
       if (Math.abs(vx) < 0.3 && Math.abs(vy) < 0.3) return
-      const W = window.innerWidth
-      const H = window.innerHeight
+      const { w: W, h: H } = visibleViewport()
       const { w, h } = panelSize
       let nx = x + vx
       let ny = y + vy
@@ -408,9 +419,14 @@ export function DiscoRoom() {
     if (!dragStartRef.current) return
     const dx = e.clientX - dragStartRef.current.x
     const dy = e.clientY - dragStartRef.current.y
-    setPanelPos({ x: dragStartRef.current.px + dx, y: dragStartRef.current.py + dy })
+    const { w: W, h: H } = visibleViewport()
+    let nx = dragStartRef.current.px + dx
+    let ny = dragStartRef.current.py + dy
+    nx = Math.max(0, Math.min(W - panelSize.w, nx))
+    ny = Math.max(0, Math.min(H - panelSize.h, ny))
+    setPanelPos({ x: nx, y: ny })
     lastMoveRef.current = [...lastMoveRef.current.slice(-4), { x: e.clientX, y: e.clientY, t: Date.now() }]
-  }, [])
+  }, [panelSize.w, panelSize.h])
 
   const handlePanelPointerUp = useCallback((e: React.PointerEvent) => {
     ;(e.target as HTMLElement).releasePointerCapture?.(e.pointerId)
@@ -440,41 +456,68 @@ export function DiscoRoom() {
     ;(e.target as HTMLElement).setPointerCapture?.(e.pointerId)
   }, [panelSize])
 
-  // When panel is first hidden, place "Show controls" button at bottom-right
+  function clampShowBtnToViewport(pos: { x: number; y: number }): { x: number; y: number } {
+    const { w: W, h: H } = visibleViewport()
+    const minX = SHOW_BTN_MARGIN
+    const maxX = Math.max(minX, W - SHOW_BTN_W - SHOW_BTN_MARGIN)
+    const minY = SHOW_BTN_MARGIN
+    const maxY = Math.max(minY, H - SHOW_BTN_H - SHOW_BTN_MARGIN)
+    return {
+      x: Math.max(minX, Math.min(maxX, pos.x)),
+      y: Math.max(minY, Math.min(maxY, pos.y)),
+    }
+  }
+
+  // When panel is first hidden, place "Show controls" button within visible viewport (with margin)
   useEffect(() => {
     if (!panelVisible && showBtnPos.x === 0 && showBtnPos.y === 0) {
-      setShowBtnPos({
-        x: Math.max(0, window.innerWidth - 180),
-        y: Math.max(0, window.innerHeight - 52),
-      })
+      const { w: W, h: H } = visibleViewport()
+      setShowBtnPos(clampShowBtnToViewport({
+        x: W - SHOW_BTN_W - 20,
+        y: H - SHOW_BTN_H - 20,
+      }))
     }
   }, [panelVisible, showBtnPos.x, showBtnPos.y])
+
+  // Keep Show controls button inside visible viewport on resize (strong walls)
+  useEffect(() => {
+    if (panelVisible) return
+    const onResize = () => {
+      setShowBtnPos(p => clampShowBtnToViewport(p))
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [panelVisible])
 
   const showBtnPosRef = useRef(showBtnPos)
   const showBtnVelRef = useRef(showBtnVel)
   showBtnPosRef.current = showBtnPos
   showBtnVelRef.current = showBtnVel
 
-  // Bounce physics for "Show controls" button when panel is hidden (runs continuously so jet velocity is applied)
+  // Bounce physics for "Show controls" button; strong walls with margin so it never gets stuck off-screen
   useEffect(() => {
     if (panelVisible) return
-    const btnW = 140
-    const btnH = 44
     const step = () => {
       if (showBtnDragRef.current) {
         showBtnBounceRef.current = requestAnimationFrame(step)
         return
       }
-      const { x, y } = showBtnPosRef.current
+      const { w: W, h: H } = visibleViewport()
+      const minX = SHOW_BTN_MARGIN
+      const maxX = Math.max(minX, W - SHOW_BTN_W - SHOW_BTN_MARGIN)
+      const minY = SHOW_BTN_MARGIN
+      const maxY = Math.max(minY, H - SHOW_BTN_H - SHOW_BTN_MARGIN)
+      let { x, y } = showBtnPosRef.current
+      // Rescue: clamp current position every frame so we never stay off-screen
+      x = Math.max(minX, Math.min(maxX, x))
+      y = Math.max(minY, Math.min(maxY, y))
       let { vx, vy } = showBtnVelRef.current
-      const W = window.innerWidth
-      const H = window.innerHeight
       let nx = x + vx
       let ny = y + vy
-      if (nx < 0) { nx = 0; vx = -vx * BOUNCE }
-      if (nx + btnW > W) { nx = W - btnW; vx = -vx * BOUNCE }
-      if (ny < 0) { ny = 0; vy = -vy * BOUNCE }
-      if (ny + btnH > H) { ny = H - btnH; vy = -vy * BOUNCE }
+      if (nx < minX) { nx = minX; vx = -vx * BOUNCE }
+      if (nx + SHOW_BTN_W > W - SHOW_BTN_MARGIN) { nx = maxX; vx = -vx * BOUNCE }
+      if (ny < minY) { ny = minY; vy = -vy * BOUNCE }
+      if (ny + SHOW_BTN_H > H - SHOW_BTN_MARGIN) { ny = maxY; vy = -vy * BOUNCE }
       vx *= FRICTION
       vy *= FRICTION
       setShowBtnPos({ x: nx, y: ny })
@@ -487,11 +530,11 @@ export function DiscoRoom() {
     }
   }, [panelVisible])
 
-  // Random "jet" every 60–120s for Show controls button (like a baseball bat hit)
+  // Random "jet" every 30s–1min for Show controls button (like hit with a bat)
   useEffect(() => {
     if (panelVisible) return
     const schedule = () => {
-      const delay = 60000 + Math.random() * 60000 // 60–120 s
+      const delay = 30000 + Math.random() * 30000 // 30–60 s
       const t = setTimeout(() => {
         setShowBtnVel(v => ({
           vx: v.vx + (Math.random() - 0.5) * 24,
@@ -519,10 +562,10 @@ export function DiscoRoom() {
       const d = showBtnDragRef.current
       if (!d) return
       showBtnWasDraggingRef.current = true
-      setShowBtnPos({
-        x: Math.max(0, Math.min(window.innerWidth - 140, d.startX + (e.clientX - d.x))),
-        y: Math.max(0, Math.min(window.innerHeight - 44, d.startY + (e.clientY - d.y))),
-      })
+      setShowBtnPos(clampShowBtnToViewport({
+        x: d.startX + (e.clientX - d.x),
+        y: d.startY + (e.clientY - d.y),
+      }))
     }
     const onUp = () => {
       showBtnDragRef.current = null
@@ -581,22 +624,15 @@ export function DiscoRoom() {
           <button type="button" className="disco-hide-btn" onClick={() => setPanelVisible(false)} title="Hide panel">−</button>
         </div>
 
-        {!token ? (
-          <div className="disco-full-songs-cta">
-            <p><strong>Full songs</strong> in the app need Spotify Premium and a sign-in.</p>
-            <a
-              href={typeof window !== 'undefined' ? `/api/spotify/login?frontend_redirect=${encodeURIComponent(window.location.origin + '/arcade/spotify-full')}` : '#'}
-              className="disco-signin-btn"
-            >
-              Sign in with Spotify
-            </a>
-            <p className="disco-full-songs-note">After sign-in, use &quot;Play playlist&quot; and the controls above the embed for full playback.</p>
-          </div>
-        ) : null}
-
-        {premiumError && (
-          <div className="disco-premium-err">{premiumError}</div>
+        {!token && (
+          <a
+            href={typeof window !== 'undefined' ? `/api/spotify/login?frontend_redirect=${encodeURIComponent(window.location.origin + '/arcade/spotify-full')}` : '#'}
+            className="disco-signin-btn"
+          >
+            Sign in with Spotify
+          </a>
         )}
+        {premiumError && <div className="disco-premium-err">{premiumError}</div>}
 
         {sdkDeviceId && (
           <div className="disco-sdk-bar">
@@ -638,12 +674,11 @@ export function DiscoRoom() {
         </div>
 
         <div className="disco-embed-wrap">
-          <p className="disco-embed-hint">Click the play button inside the player below to start 30s previews.</p>
           <iframe
             title="Spotify playlist"
             src={`https://open.spotify.com/embed/playlist/${playlistId}?utm_source=generator&theme=0`}
             width="100%"
-            height="400"
+            height="280"
             frameBorder="0"
             allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
             loading="lazy"
@@ -673,9 +708,9 @@ export function DiscoRoom() {
         .disco-show-panel-btn:active { cursor: grabbing; }
         .disco-panel { position: fixed; z-index: 5; display: flex; flex-direction: column; overflow: hidden; border-radius: 16px; box-sizing: border-box; }
         .disco-panel--minimized { visibility: hidden; pointer-events: none; }
-        .disco-content { position: relative; z-index: 1; padding: 0 1.25rem 1.5rem; padding-top: 0; flex: 1; display: flex; flex-direction: column; overflow: auto; background: rgba(0,0,0,0.35); border-radius: 16px; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
+        .disco-content { position: relative; z-index: 1; padding: 0 0.9rem 0.9rem; padding-top: 0; flex: 1; display: flex; flex-direction: column; overflow: auto; background: rgba(0,0,0,0.35); border-radius: 16px; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
         .disco-drag-handle {
-          display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; cursor: grab; user-select: none;
+          display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.75rem; cursor: grab; user-select: none;
           background: linear-gradient(180deg, rgba(255,107,157,0.25) 0%, rgba(0,0,0,0.4) 100%);
           border: 2px solid rgba(255,107,157,0.5); border-bottom-width: 3px;
           border-radius: 16px 16px 0 0;
@@ -696,26 +731,19 @@ export function DiscoRoom() {
         .disco-resize-handle:hover { background: linear-gradient(135deg, transparent 50%, rgba(255,107,157,0.4) 50%); }
         .disco-back { font-size: 0.9rem; color: var(--text-muted); }
         .disco-back:hover { color: var(--arcade); }
-        .disco-full-songs-cta {
-          margin-bottom: 1rem; padding: 0.75rem 1rem; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,107,157,0.4);
-          border-radius: 10px; font-size: 0.85rem; color: var(--text-muted);
-        }
-        .disco-full-songs-cta p { margin: 0 0 0.5rem; }
-        .disco-full-songs-cta p:last-child { margin-bottom: 0; }
         .disco-signin-btn {
-          display: inline-block; padding: 0.5rem 1rem; background: var(--arcade); color: var(--bg); font-weight: 600;
-          border-radius: 8px; text-decoration: none; font-size: 0.9rem; margin-top: 0.25rem;
+          display: inline-block; padding: 0.4rem 0.75rem; background: var(--arcade); color: var(--bg); font-weight: 600;
+          border-radius: 8px; text-decoration: none; font-size: 0.85rem; margin-bottom: 0.5rem;
         }
         .disco-signin-btn:hover { opacity: 0.95; }
-        .disco-full-songs-note { font-size: 0.8rem; opacity: 0.9; margin-top: 0.5rem; }
-        .disco-premium-err { font-size: 0.8rem; color: #e74c3c; margin-bottom: 0.75rem; padding: 0.4rem 0; }
-        .disco-sdk-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-bottom: 1rem; padding: 0.6rem; background: rgba(0,0,0,0.4); border-radius: 10px; border: 1px solid var(--arcade); }
+        .disco-premium-err { font-size: 0.75rem; color: #e74c3c; margin-bottom: 0.5rem; padding: 0.25rem 0; }
+        .disco-sdk-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-bottom: 0.6rem; padding: 0.5rem; background: rgba(0,0,0,0.4); border-radius: 10px; border: 1px solid var(--arcade); }
         .disco-sdk-label { font-size: 0.75rem; color: var(--text-muted); margin-right: 0.25rem; }
         .disco-sdk-btn { padding: 0.4rem 0.75rem; background: var(--arcade); border: none; border-radius: 8px; color: var(--bg); font-weight: 600; font-size: 0.85rem; cursor: pointer; font-family: var(--font); }
         .disco-sdk-btn:hover { opacity: 0.9; }
         .disco-sdk-btn.disco-sdk-icon { padding: 0.4rem 0.5rem; font-size: 1rem; }
-        .disco-controls { display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1.5rem; }
-        .disco-label { font-size: 0.8rem; color: var(--text-muted); display: flex; flex-direction: column; gap: 0.25rem; }
+        .disco-controls { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.75rem; }
+        .disco-label { font-size: 0.75rem; color: var(--text-muted); display: flex; flex-direction: column; gap: 0.2rem; }
         .disco-input {
           padding: 0.5rem 0.75rem; background: rgba(0,0,0,0.4); border: 1px solid var(--border); border-radius: 8px;
           color: var(--text); font-size: 0.9rem; font-family: var(--font);
@@ -729,8 +757,7 @@ export function DiscoRoom() {
         .disco-bpm { flex-direction: row; align-items: center; flex-wrap: wrap; }
         .disco-range { flex: 1; min-width: 120px; accent-color: var(--arcade); }
         .disco-bpm-value { font-family: var(--font-mono); color: var(--arcade); margin-left: 0.5rem; min-width: 2rem; }
-        .disco-embed-wrap { border-radius: 12px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.5); position: relative; margin-bottom: 28px; }
-        .disco-embed-hint { font-size: 0.75rem; color: var(--text-muted); margin: 0 0 0.35rem; }
+        .disco-embed-wrap { border-radius: 12px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.5); position: relative; margin-bottom: 16px; }
         .disco-embed { display: block; border: none; }
         @media (min-width: 600px) {
           .disco-content { margin: 1.5rem auto; }

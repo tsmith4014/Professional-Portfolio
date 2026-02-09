@@ -410,8 +410,8 @@ export function NameThatTune() {
           position: absolute; inset: 0; border-radius: 12px;
           backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
           background: rgba(0,0,0,0.4);
-          -webkit-mask-image: radial-gradient(circle at 88% 72%, transparent 56px, black 56px);
-          mask-image: radial-gradient(circle at 88% 72%, transparent 56px, black 56px);
+          -webkit-mask-image: radial-gradient(circle at 88% 72%, transparent 36px, black 36px);
+          mask-image: radial-gradient(circle at 88% 72%, transparent 36px, black 36px);
           pointer-events: none;
           transition: opacity 0.45s ease;
         }
