@@ -39,6 +39,7 @@ interface SpotifyEmbedController {
   play: () => void
   pause: () => void
   resume: () => void
+  togglePlay?: () => void
   destroy?: () => void
 }
 
@@ -64,6 +65,7 @@ export function NameThatTune() {
   const [spotifyToken, setSpotifyToken] = useState<string | null>(getStoredToken)
   const [spotifyError, setSpotifyError] = useState<string | null>(null)
   const [embedReady, setEmbedReady] = useState(false)
+  const [playFeedback, setPlayFeedback] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const embedContainerRef = useRef<HTMLDivElement | null>(null)
   const embedControllerRef = useRef<SpotifyEmbedController | null>(null)
@@ -199,6 +201,20 @@ export function NameThatTune() {
     }
   }, [])
 
+  const handlePlayPreview = useCallback(() => {
+    const ctrl = embedControllerRef.current
+    if (!ctrl) return
+    setPlayFeedback(true)
+    setTimeout(() => setPlayFeedback(false), 800)
+    if (typeof ctrl.resume === 'function') {
+      ctrl.resume()
+    } else if (typeof (ctrl as SpotifyEmbedController & { togglePlay?: () => void }).togglePlay === 'function') {
+      ;(ctrl as SpotifyEmbedController & { togglePlay: () => void }).togglePlay!()
+    } else if (typeof ctrl.play === 'function') {
+      ctrl.play()
+    }
+  }, [])
+
   const choose = useCallback(
     (name: string) => {
       if (revealed || !track) return
@@ -316,10 +332,10 @@ export function NameThatTune() {
                 <button
                   type="button"
                   className="ntt-play"
-                  onClick={() => embedControllerRef.current?.play?.()}
+                  onClick={handlePlayPreview}
                   aria-label="Play track preview"
                 >
-                  Play
+                  {playFeedback ? 'Playing…' : 'Play'}
                 </button>
               )}
             </div>
@@ -382,11 +398,10 @@ export function NameThatTune() {
         .ntt-embed-wrap.ntt-embed-wrap--hidden { display: none; }
         .ntt-mystery-wrap { position: relative; width: 100%; max-width: 340px; margin: 0 auto; border-radius: 12px; overflow: hidden; }
         .ntt-mystery-overlay {
-          position: absolute; inset: 0; border-radius: 12px;
+          position: absolute; left: 0; top: 0; bottom: 0; width: 58%;
+          border-radius: 12px 0 0 12px;
           backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
           background: rgba(0,0,0,0.4);
-          -webkit-mask-image: radial-gradient(circle at 88% 72%, transparent 56px, black 56px);
-          mask-image: radial-gradient(circle at 88% 72%, transparent 56px, black 56px);
           pointer-events: none;
           transition: opacity 0.45s ease;
         }
