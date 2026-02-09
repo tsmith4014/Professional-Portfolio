@@ -73,7 +73,6 @@ jobs:
           docker run -d --name backend --network my_network -p 8001:8001 \
             -e SPOTIFY_CLIENT_ID="${{ secrets.SPOTIFY_CLIENT_ID }}" \
             -e SPOTIFY_CLIENT_SECRET="${{ secrets.SPOTIFY_CLIENT_SECRET }}" \
-            -e SPOTIFY_REDIRECT_URI="https://arcade.devopschad.com/api/spotify/callback" \
             -e FRONTEND_ORIGIN="https://arcade.devopschad.com" \
             tsmith4014/career-backend:latest
           docker run -d --name frontend --network my_network -p 8000:8000 \
