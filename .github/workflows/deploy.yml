@@ -67,8 +67,9 @@ jobs:
           docker network create my_network 2>/dev/null || true
           docker pull tsmith4014/career-backend:latest
           docker pull tsmith4014/career-page:latest
-          docker stop backend frontend 2>/dev/null || true
-          docker rm -f backend frontend 2>/dev/null || true
+          docker pull tsmith4014/expense_report:onepageprintAug29
+          docker stop backend frontend backend2 2>/dev/null || true
+          docker rm -f backend frontend backend2 2>/dev/null || true
           docker run -d --name backend --network my_network -p 8001:8001 \
             -e SPOTIFY_CLIENT_ID="${{ secrets.SPOTIFY_CLIENT_ID }}" \
             -e SPOTIFY_CLIENT_SECRET="${{ secrets.SPOTIFY_CLIENT_SECRET }}" \
@@ -77,7 +78,8 @@ jobs:
             tsmith4014/career-backend:latest
           docker run -d --name frontend --network my_network -p 8000:8000 \
             tsmith4014/career-page:latest
-          # Apply host nginx configs (arcade + main site devopschad.com in expenseapp)
+          docker run -d --name backend2 -p 8002:8001 tsmith4014/expense_report:onepageprintAug29
+          # Apply host nginx configs (arcade + main site + expenseapp)
           if [ -f /tmp/arcade.devopschad.com.conf ]; then
             sudo cp /tmp/arcade.devopschad.com.conf /etc/nginx/sites-available/arcade.devopschad.com.conf
             sudo ln -sf /etc/nginx/sites-available/arcade.devopschad.com.conf /etc/nginx/sites-enabled/

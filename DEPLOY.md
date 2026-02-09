@@ -40,6 +40,18 @@ docker push tsmith4014/career-page:latest
 cd backend && docker build -t tsmith4014/career-backend:latest . && docker push tsmith4014/career-backend:latest
 ```
 
+## Troubleshooting
+
+**Main site (devopschad.com) returns 502 after a deploy**  
+This workflow only updates **arcade.devopschad.com** and only stops containers named **backend** and **frontend**. If the apex and arcade share the same host and the main site was served by something on port 8000/8001, a previous deploy step had stopped *any* container on those ports, which could have taken down the main site. That step is removed. To restore the main site: SSH to the host, see what serves the apex (`grep -r server_name /etc/nginx/sites-enabled/` and check `proxy_pass`), then start or restart that app. If the main site must use 8000, run that app again (arcade frontend can use another port, or only one app uses 8000).
+
+**Deploy step fails with “pull access denied for tsmith4014/career-backend” (or career-page)**  
+The Oracle server logs into Docker Hub and pulls the images. That error means the image **wasn’t pushed** (or the repo doesn’t exist yet). The **build** job is responsible for pushing.
+
+1. In GitHub Actions, open the **same workflow run** and check the **build** job (not deploy). Confirm that **“Push backend image to Docker Hub”** (and “Push frontend image…”) both **succeeded**. If either push failed, fix the cause (e.g. backend Docker build failure, or Docker Hub auth).
+2. On [Docker Hub](https://hub.docker.com), log in as the user in `DOCKER_HUB_USERNAME` and check that **`tsmith4014/career-backend`** and **`tsmith4014/career-page`** exist. If `career-backend` is missing, the backend push has never succeeded; fix the build job and re-run (or push the backend image once manually so the repo exists).
+3. Ensure **DOCKER_HUB_TOKEN** has permission to push (and that the same token is used in both build and deploy). A Docker Hub access token with “Read, Write, Delete” for the account is enough.
+
 ## Commits before deploy
 
 Use clear commits so the repo and deployed version stay in sync:
