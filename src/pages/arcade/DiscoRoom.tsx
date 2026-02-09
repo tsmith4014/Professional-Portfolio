@@ -638,11 +638,12 @@ export function DiscoRoom() {
         </div>
 
         <div className="disco-embed-wrap">
+          <p className="disco-embed-hint">Click the play button inside the player below to start 30s previews.</p>
           <iframe
             title="Spotify playlist"
             src={`https://open.spotify.com/embed/playlist/${playlistId}?utm_source=generator&theme=0`}
             width="100%"
-            height="352"
+            height="400"
             frameBorder="0"
             allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
             loading="lazy"
@@ -728,7 +729,8 @@ export function DiscoRoom() {
         .disco-bpm { flex-direction: row; align-items: center; flex-wrap: wrap; }
         .disco-range { flex: 1; min-width: 120px; accent-color: var(--arcade); }
         .disco-bpm-value { font-family: var(--font-mono); color: var(--arcade); margin-left: 0.5rem; min-width: 2rem; }
-        .disco-embed-wrap { border-radius: 12px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+        .disco-embed-wrap { border-radius: 12px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.5); position: relative; margin-bottom: 28px; }
+        .disco-embed-hint { font-size: 0.75rem; color: var(--text-muted); margin: 0 0 0.35rem; }
         .disco-embed { display: block; border: none; }
         @media (min-width: 600px) {
           .disco-content { margin: 1.5rem auto; }

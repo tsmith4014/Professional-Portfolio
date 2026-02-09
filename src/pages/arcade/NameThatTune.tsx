@@ -164,6 +164,12 @@ export function NameThatTune() {
 
   useEffect(() => () => { stop() }, [stop])
 
+  // When track changes, load its URI into the embed controller
+  useEffect(() => {
+    const ctrl = embedControllerRef.current
+    if (ctrl?.loadUri && track?.id) ctrl.loadUri(`spotify:track:${track.id}`)
+  }, [track?.id])
+
   // Spotify Embed iframe API: set callback first, then load script so we never miss the ready event
   useEffect(() => {
     window.onSpotifyIframeApiReady = (IFrameAPI) => {
@@ -306,8 +312,18 @@ export function NameThatTune() {
                 )}
                 <div className={'ntt-mystery-overlay' + (revealed ? ' ntt-mystery-overlay--revealed' : '')} aria-hidden="true" />
               </div>
+              {embedReady && (
+                <button
+                  type="button"
+                  className="ntt-play"
+                  onClick={() => embedControllerRef.current?.play?.()}
+                  aria-label="Play track preview"
+                >
+                  Play
+                </button>
+              )}
             </div>
-            <p className="ntt-hint">Listen with the play button — track stays hidden until you guess.</p>
+            <p className="ntt-hint">Click Play above, then guess. Track stays hidden until you guess.</p>
             <div className="ntt-options">
               {options.map((opt) => (
                 <button
@@ -369,8 +385,8 @@ export function NameThatTune() {
           position: absolute; inset: 0; border-radius: 12px;
           backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
           background: rgba(0,0,0,0.4);
-          -webkit-mask-image: radial-gradient(circle at 88% 72%, transparent 40px, black 40px);
-          mask-image: radial-gradient(circle at 88% 72%, transparent 40px, black 40px);
+          -webkit-mask-image: radial-gradient(circle at 88% 72%, transparent 56px, black 56px);
+          mask-image: radial-gradient(circle at 88% 72%, transparent 56px, black 56px);
           pointer-events: none;
           transition: opacity 0.45s ease;
         }
