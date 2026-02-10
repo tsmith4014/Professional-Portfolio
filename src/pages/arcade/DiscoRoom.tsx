@@ -11,6 +11,7 @@ const FRICTION = 0.98
 const TOSS_MULT = 0.4
 const SHOW_BTN_W = 140
 const SHOW_BTN_H = 44
+const PANEL_MARGIN = 8
 
 function visibleViewport(): { w: number; h: number } {
   if (typeof document === 'undefined') return { w: 800, h: 600 }
@@ -18,6 +19,12 @@ function visibleViewport(): { w: number; h: number } {
     w: document.documentElement.clientWidth,
     h: document.documentElement.clientHeight,
   }
+}
+
+// Panel uses position:fixed; use innerWidth/innerHeight so bounds match the viewport it's drawn in
+function panelViewport(): { w: number; h: number } {
+  if (typeof window === 'undefined') return { w: 800, h: 600 }
+  return { w: window.innerWidth, h: window.innerHeight }
 }
 
 const SPOTIFY_TOKEN_KEY = 'spotify_access_token'
@@ -81,21 +88,47 @@ export function DiscoRoom() {
   const panelInitialized = useRef(false)
   beatSyncRef.current = beatSync
 
-  // Center panel on first mount within visible viewport
+  // Clamp panel position and size so right/bottom edges never go off-screen (position:fixed viewport)
+  const clampPanelInView = useCallback(() => {
+    const { w: W, h: H } = panelViewport()
+    const { w: cw, h: ch } = panelSizeRef.current
+    const { x: cx, y: cy } = panelPosRef.current
+    const w = Math.max(PANEL_MIN_W, Math.min(600, W - PANEL_MARGIN * 2, cw))
+    const h = Math.max(PANEL_MIN_H, Math.min(800, H - PANEL_MARGIN * 2, ch))
+    const maxX = Math.max(0, W - w - PANEL_MARGIN)
+    const maxY = Math.max(0, H - h - PANEL_MARGIN)
+    const x = Math.max(0, Math.min(maxX, cx))
+    const y = Math.max(0, Math.min(maxY, cy))
+    setPanelSize({ w, h })
+    setPanelPos({ x, y })
+  }, [])
+
+  // Center panel on first mount; keep fully inside viewport
   useEffect(() => {
     if (panelInitialized.current) return
     panelInitialized.current = true
     const place = () => {
-      const { w: W, h: H } = visibleViewport()
+      const { w: W, h: H } = panelViewport()
+      const maxX = Math.max(0, W - PANEL_DEFAULT_W - PANEL_MARGIN)
+      const maxY = Math.max(0, H - PANEL_DEFAULT_H - PANEL_MARGIN)
       setPanelPos({
-        x: Math.max(0, Math.min(W - PANEL_DEFAULT_W, (W - PANEL_DEFAULT_W) / 2)),
-        y: Math.max(0, Math.min(H - PANEL_DEFAULT_H, (H - PANEL_DEFAULT_H) / 2)),
+        x: Math.max(0, Math.min(maxX, (W - PANEL_DEFAULT_W) / 2)),
+        y: Math.max(0, Math.min(maxY, (H - PANEL_DEFAULT_H) / 2)),
       })
     }
     place()
     window.addEventListener('resize', place)
     return () => window.removeEventListener('resize', place)
   }, [])
+
+  // Keep panel in bounds on resize and whenever panel becomes visible
+  useEffect(() => {
+    if (!panelVisible) return
+    const onResize = () => clampPanelInView()
+    onResize()
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [panelVisible, clampPanelInView])
 
   const [token, setToken] = useState<string | null>(() =>
     typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(SPOTIFY_TOKEN_KEY) : null
@@ -368,23 +401,27 @@ export function DiscoRoom() {
 
   const panelPosRef = useRef(panelPos)
   const panelVelRef = useRef(panelVelocity)
+  const panelSizeRef = useRef(panelSize)
   panelPosRef.current = panelPos
   panelVelRef.current = panelVelocity
+  panelSizeRef.current = panelSize
 
-  // Bounce physics when panel is tossed; use visible viewport so panel never gets stuck off-screen
+  // Bounce physics when panel is tossed; use panelViewport so right edge never off-screen
   useEffect(() => {
     const step = () => {
       const { x, y } = panelPosRef.current
       let { vx, vy } = panelVelRef.current
       if (Math.abs(vx) < 0.3 && Math.abs(vy) < 0.3) return
-      const { w: W, h: H } = visibleViewport()
+      const { w: W, h: H } = panelViewport()
       const { w, h } = panelSize
+      const maxX = Math.max(0, W - w - PANEL_MARGIN)
+      const maxY = Math.max(0, H - h - PANEL_MARGIN)
       let nx = x + vx
       let ny = y + vy
       if (nx < 0) { nx = 0; vx = -vx * BOUNCE }
-      if (nx + w > W) { nx = W - w; vx = -vx * BOUNCE }
+      if (nx + w > W - PANEL_MARGIN) { nx = maxX; vx = -vx * BOUNCE }
       if (ny < 0) { ny = 0; vy = -vy * BOUNCE }
-      if (ny + h > H) { ny = H - h; vy = -vy * BOUNCE }
+      if (ny + h > H - PANEL_MARGIN) { ny = maxY; vy = -vy * BOUNCE }
       vx *= FRICTION
       vy *= FRICTION
       setPanelPos({ x: nx, y: ny })
@@ -410,20 +447,27 @@ export function DiscoRoom() {
   const handlePanelPointerMove = useCallback((e: React.PointerEvent) => {
     if (resizingRef.current) {
       const { w: startW, h: startH, x: startX, y: startY } = resizingRef.current
+      const { w: W, h: H } = panelViewport()
+      const rawW = startW + (e.clientX - startX)
+      const rawH = startH + (e.clientY - startY)
+      const maxW = W - panelPosRef.current.x - PANEL_MARGIN
+      const maxH = H - panelPosRef.current.y - PANEL_MARGIN
       setPanelSize({
-        w: Math.max(PANEL_MIN_W, Math.min(600, startW + (e.clientX - startX))),
-        h: Math.max(PANEL_MIN_H, Math.min(800, startH + (e.clientY - startY))),
+        w: Math.max(PANEL_MIN_W, Math.min(600, maxW, rawW)),
+        h: Math.max(PANEL_MIN_H, Math.min(800, maxH, rawH)),
       })
       return
     }
     if (!dragStartRef.current) return
     const dx = e.clientX - dragStartRef.current.x
     const dy = e.clientY - dragStartRef.current.y
-    const { w: W, h: H } = visibleViewport()
+    const { w: W, h: H } = panelViewport()
+    const maxX = Math.max(0, W - panelSize.w - PANEL_MARGIN)
+    const maxY = Math.max(0, H - panelSize.h - PANEL_MARGIN)
     let nx = dragStartRef.current.px + dx
     let ny = dragStartRef.current.py + dy
-    nx = Math.max(0, Math.min(W - panelSize.w, nx))
-    ny = Math.max(0, Math.min(H - panelSize.h, ny))
+    nx = Math.max(0, Math.min(maxX, nx))
+    ny = Math.max(0, Math.min(maxY, ny))
     setPanelPos({ x: nx, y: ny })
     lastMoveRef.current = [...lastMoveRef.current.slice(-4), { x: e.clientX, y: e.clientY, t: Date.now() }]
   }, [panelSize.w, panelSize.h])
